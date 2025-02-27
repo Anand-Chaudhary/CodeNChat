@@ -19,37 +19,45 @@ export const createUserController = async (req, res) => {
 
 export const loginController = async (req, res) => {
     const errors = validationResult(req);
-
+    
     if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() })
+        return res.status(400).json({ errors: errors.array() });
     }
+
     try {
         const { email, password } = req.body;
         const user = await userModel.findOne({ email }).select("+password");
 
         if (!user) {
-            return res.status(401).json({
-                error: "Invalid Credentials"
-            })
+            return res.status(401).json({ error: "Invalid Credentials" });
         }
 
         const isMatch = await user.isValidPassword(password);
 
         if (!isMatch) {
-            return res.status(401).json({
-                error: "Invalid Credentials"
-            })
+            return res.status(401).json({ error: "Invalid Credentials" });
         }
 
         const token = await user.generateJWT();
 
-        res.status(200).json({ message: 'Logged In Successfully' });
+        res.status(200).json({
+            message: "Logged In Successfully",
+            token,
+            user: {
+                id: user._id,
+                name: user.name,
+                email: user.email
+            }
+        });
     } catch (err) {
-        console.log(err);
-        res.status(500).json({ error: "Server error" });
+        console.error("Login Error:", err);
+        res.status(500).json({ message: "Internal Server Error" });
     }
 };
-
 export const profileController = async (req, res) =>{
-    
-}
+    console.log(req.user);
+
+    res.status(200).json({
+        user: req.user
+    });
+}   
