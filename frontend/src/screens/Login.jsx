@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import axiosInstance from '../config/axios.js';
 
 const Login = () => {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
   });
+
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -17,14 +19,21 @@ const Login = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    // Add your login logic here
+    axiosInstance.post('/users/login', formData)
+      .then((res) => {
+        console.log(res.data);
+        navigate('/');
+      })
+      .catch((err) => {
+        console.error(err);
+      });
     console.log('Login attempt with:', formData);
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-zinc-900">
       <div className="bg-zinc-800 p-8 rounded-lg shadow-xl w-full max-w-md">
-        <h2 className="text-3xl font-bold text-center text-white mb-8">Welcome Back</h2>
+        <h2 className="text-3xl tracking-tighter underline text-center text-white mb-8">Welcome Back</h2>
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-zinc-300">
@@ -56,7 +65,7 @@ const Login = () => {
           </div>
           <button
             type="submit"
-            className="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
+            className="w-full outline-none py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
           >
             Login
           </button>
