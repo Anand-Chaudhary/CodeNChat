@@ -15,3 +15,8 @@ export const createUser = async ({
 
     return user;
 }
+
+export const getAllUsers = async()=>{
+    const users = await userModel.find();
+    return users;
+}

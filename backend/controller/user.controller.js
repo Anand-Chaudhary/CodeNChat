@@ -77,3 +77,11 @@ export const logoutController = async (req, res) => {
         return res.status(400).send(err.message)
     }
 }
+
+export const getAllUsersController = async (req, res) => {
+    try{
+        
+    }catch(err){
+        console.log(err.message);
+        return res.status(400).send(err.message)}
+}
