@@ -12,20 +12,20 @@ function Home() {
       name: projectName,
     }).then((res) => {
       console.log('Project created:', res.data);
-      setIsModalOpen(false);
     }).catch((err) => {
-      console.error('Project creation error:', err.message);
+      console.error(err);
     })
+    setIsModalOpen(false);
   }
 
   return (
     <main className="min-h-screen p-4 bg-zinc-900 text-white">
       <div className="projects">
         <button 
-          className="project p-4 border-2 border-white rounded-lg mb-4"
+          className="project p-4 border-2 border-white rounded-lg mb-4 hover:bg-zinc-600"
           onClick={() => setIsModalOpen(true)}
-        >
-          <i className="ri-link font-medium p-2 ml-2">Create New Project</i>
+        >Create New Project
+          <i className="ri-link font-medium p-2 ml-2"></i>
         </button>
       </div>
 
