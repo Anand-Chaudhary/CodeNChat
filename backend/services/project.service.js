@@ -74,3 +74,28 @@ export const addUserToProject = async ({ projectId, users, userId }) => {
     )
     return updatedProject;
 }
+
+export const getProjectById = async (projectId) => {
+    try {
+        if (!projectId) {
+            throw new Error("projectId is required");
+        }
+
+        // Extract projectId if it's passed as an object
+        const id = typeof projectId === 'object' ? projectId.projectId : projectId;
+        
+        console.log('Processing projectId:', id);
+
+        const project = await projectModel.findById(id).populate('users');
+        
+        if (!project) {
+            throw new Error("Project not found");
+        }
+
+        return project;
+
+    } catch (error) {
+        console.error('Error in getProjectById:', error);
+        throw error;
+    }
+}
