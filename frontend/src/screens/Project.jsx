@@ -66,22 +66,23 @@ const Project = () => {
     if (!selectedUsers.length) return;
 
     try {
-      console.log('Sending selected users:', selectedUsers); // Debug log
+      console.log('Sending selected users:', selectedUsers);
       const response = await axiosInstance.put(`/projects/add-user`, {
+        projectId: location.state.project._id,
         users: selectedUsers
       });
       
       console.log('Users added successfully:', response.data);
-      // Show success message or update UI
       setIsAddUserModalOpen(false);
-      setSelectedUsers([]); // Clear selection
+      setSelectedUsers([]);
       
-      // Optionally refresh the project users list
-      // You might want to add a function to fetch and update the project users
+      // Refresh the project users list
+      const updatedProject = await axiosInstance.get(`/projects/get-project/${location.state.project._id}`);
+      setProjectUsers(updatedProject.data.project.users || []);
       
     } catch (error) {
       console.error('Error adding users:', error);
-      // Show error message to user
+      setError('Failed to add users. Please try again.');
     }
   };
 
@@ -208,7 +209,7 @@ const Project = () => {
                       key={user._id}
                       onClick={() => handleUserSelect(user._id)}
                       className={`p-4 rounded-xl cursor-pointer flex items-center gap-3 transition-all duration-200 hover:shadow-md
-                        ${selectedUsers.includes(user._id) 
+                        ${selectedUsers.indexOf(user._id)!=-1 
                           ? 'bg-purple-50 border-2 border-purple-500 shadow-purple-100' 
                           : 'bg-gray-50 hover:bg-gray-100 border-2 border-transparent'}`}
                     >
