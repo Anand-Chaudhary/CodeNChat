@@ -1,9 +1,22 @@
-import React, { useState, useEffect } from "react";
-import { useLocation } from "react-router-dom";
+import React, { useState, useEffect, useContext } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import axiosInstance from "../config/axios";
+import {initializeSocket, receiveMessage, sendMessage} from "../config/socket";
+import {UserContext} from "../context/User.Context.jsx";
 
 const Project = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const {user} = useContext(UserContext);
+  
+  // Add check for user authentication
+  useEffect(() => {
+    if (!user) {
+      navigate('/login');
+      return;
+    }
+  }, [user, navigate]);
+
   console.log(location.state);
   const [isSidePannelOpen, setIsSidePannelOpen] = useState(false);
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
@@ -12,15 +25,17 @@ const Project = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [projectUsers, setProjectUsers] = useState([]);
+  const [message, setMessage] = useState('');
 
   // Updated useEffect to better handle the user fetching
   useEffect(() => {
+
     const fetchUsers = async () => {
       try {
         setIsLoading(true);
         const response = await axiosInstance.get('/users/all-users');
-        console.log('Users response:', response.data); // Debug log
-        // Assuming the response has users array directly or nested
+        console.log('Users response:', response.data); 
+
         const fetchedUsers = response.data.users || response.data;
         setUsers(Array.isArray(fetchedUsers) ? fetchedUsers : []);
       } catch (err) {
@@ -85,6 +100,38 @@ const Project = () => {
       setError('Failed to add users. Please try again.');
     }
   };
+  
+  useEffect(() => {
+    const socket = initializeSocket(location.state.project._id);
+    
+    receiveMessage('project-message', (data) => {
+      console.log('Received message:', data);
+    });
+
+    return () => {
+      if (socket) {
+        socket.disconnect();
+      }
+    };
+  }, [location.state.project._id]); 
+  
+  const send = () => {
+    if (!message.trim()) return;
+    if (!user || !user.id) {
+      console.error('User not authenticated');
+      return;
+    }
+    
+    sendMessage('project-message', {
+      message: message,
+      sender: user.id,
+      timestamp: new Date().toISOString()
+    });
+    console.log('Sent message:', message);
+    
+    setMessage('');
+  };
+  
 
   return (
     <main className="w-screen h-screen flex bg-zinc-800">
@@ -123,11 +170,13 @@ const Project = () => {
           {/* Input Field */}
           <div className="input-field w-full gap-2 p-1 bg-white rounded-full flex justify-evenly">
             <input
+            value={message}
+            onChange={(e)=>setMessage(e.target.value)}
               type="text"
               className="p-2 px-8 border-none outline-none"
               placeholder="Enter Your Message...."
             />
-            <button className="bg-purple-700 flex justify-center items-center rounded-full flex-grow p-1">
+            <button className="bg-purple-700 flex justify-center items-center rounded-full flex-grow p-1" onClick={send}>
               <i className="ri-send-plane-fill text-white flex justify-center items-center"></i>
             </button>
           </div>
