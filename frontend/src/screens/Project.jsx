@@ -26,6 +26,7 @@ const Project = () => {
   const [error, setError] = useState(null);
   const [projectUsers, setProjectUsers] = useState([]);
   const [message, setMessage] = useState('');
+  const messageBox = React.createRef();
 
   // Updated useEffect to better handle the user fetching
   useEffect(() => {
@@ -101,11 +102,41 @@ const Project = () => {
     }
   };
   
+  const appendIncomingMessage = (messageObject) =>{
+    const messageBox = document.querySelector('.message-area');
+    const message = document.createElement('div')
+    message.classList.add('message', 'max-w-56', 'p-2', 'bg-white', 'w-fit', 'rounded-lg', 'flex', 'flex-col', 'gap-1');
+    message.innerHTML = `
+      <small class="opacity-65 text-xs">${messageObject.sender}</small>
+      <p class="text-sm">${messageObject.message}</p>
+    `
+    messageBox.appendChild(message);
+    scrollToBottom();
+  }
+
+  const appendOutgoingMessage = (messageObject) =>{
+    const messageBox = document.querySelector('.message-area');
+    const message = document.createElement('div')
+    message.classList.add('ml-auto', 'message', 'max-w-56', 'p-2', 'bg-white', 'w-fit', 'rounded-lg', 'flex', 'flex-col', 'gap-1');
+    message.innerHTML = `
+      <small class="opacity-65 text-xs">${messageObject.sender}</small>
+      <p class="text-sm">${messageObject.message}</p>
+    `
+    messageBox.appendChild(message);
+    scrollToBottom();
+  }
+
+  function scrollToBottom() {
+    const messageBox = document.querySelector('.message-area');
+    messageBox.scrollTop = messageBox.scrollHeight;
+  }
+
   useEffect(() => {
     const socket = initializeSocket(location.state.project._id);
     
     receiveMessage('project-message', (data) => {
       console.log('Received message:', data);
+      appendIncomingMessage(data);
     });
 
     return () => {
@@ -122,21 +153,26 @@ const Project = () => {
       return;
     }
     
-    sendMessage('project-message', {
+    const messageObject = {
       message: message,
       sender: user.id,
       timestamp: new Date().toISOString()
-    });
-    console.log('Sent message:', message);
+    };
+    
+    sendMessage('project-message', messageObject);
+    console.log('Sent message:', messageObject);
+    appendOutgoingMessage(messageObject);
     
     setMessage('');
   };
+
+  
   
 
   return (
     <main className="w-screen h-screen flex bg-zinc-800">
       <section className="left relative h-full min-w-95 flex flex-col bg-purple-300">
-        <header className="flex bg-white justify-between items-center p-2 px-4 w-full">
+        <header className="flex bg-white justify-between items-center p-2 px-4 w-full absolute top-0 z-10">
           <h1>{Project.name}</h1>
           <button
             onClick={() => setIsSidePannelOpen(!isSidePannelOpen)}
@@ -146,29 +182,15 @@ const Project = () => {
           </button>
         </header>
 
-        <div className="conversationArea flex-grow flex flex-col p-3">
-          <div className="message-area flex flex-col gap-2 flex-grow">
-            {/* Message 1 */}
-            <div className="message max-w-56 p-2 bg-white w-fit rounded-lg flex flex-col gap-1">
-              <small className="opacity-65 text-xs">example@gmail.com</small>
-              <p className="text-sm">
-                Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet,
-                consectetur adipisicing elit. Dolorem.
-              </p>
-            </div>
-
-            {/* Message 2 */}
-            <div className="ml-auto message max-w-56 p-2 bg-white w-fit rounded-lg flex flex-col gap-1">
-              <small className="opacity-65 text-xs">example@gmail.com</small>
-              <p className="text-sm">
-                Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet
-                consectetur adipisicing elit. Maiores.
-              </p>
-            </div>
+        <div className="conversationArea pt-16 flex flex-col h-full p-3 relative">
+          <div 
+            ref={messageBox}
+            className="message-area flex flex-col gap-2 flex-1 overflow-y-auto mb-2"
+          >
           </div>
 
           {/* Input Field */}
-          <div className="input-field w-full gap-2 p-1 bg-white rounded-full flex justify-evenly">
+          <div className="input-field w-full gap-2 p-1 bg-white rounded-full flex justify-evenly sticky bottom-0">
             <input
             value={message}
             onChange={(e)=>setMessage(e.target.value)}

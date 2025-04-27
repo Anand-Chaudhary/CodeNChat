@@ -1,1 +1,14 @@
 @import "tailwindcss";
+
+.message-area::-webkit-scrollbar {
+  display: none;
+}
+
+.message-area {
+  -ms-overflow-style: none; 
+  scrollbar-width: none;  
+}
+
+.message-area{
+  scroll-behavior: smooth;
+}

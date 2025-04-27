@@ -24,7 +24,7 @@ io.use(async (socket, next) => {
             return next(new Error('Invalid project ID'));
         }
 
-        const project = await Project.findById(projectID);
+        const project = await Project.findById(projectID).lean();
         if (!project) {
             return next(new Error('Project not found'));
         }
@@ -46,18 +46,21 @@ io.use(async (socket, next) => {
 })
 
 io.on('connection', socket => {
-
+    socket.roomId = socket.project._id.toString();
   console.log('New client connected');
-  socket.join(socket.project._id)
+  socket.join(socket.roomId)
 
   socket.on('project-message', data => { 
-    socket.broadcast.to(socket.project._id.toString()).emit('project-message', data);
-    console.log(`Message from ${socket.user.username} in project ${socket.project._id}: ${data}`);
+    socket.broadcast.to(socket.roomId).emit('project-message', data);
+    console.log(`Message ${data} in project ${socket.project._id}: ${data}`);
     
   });
 
   socket.on('event', data => { /* … */ });
-  socket.on('disconnect', () => { /* … */ });
+  socket.on('disconnect', () => {
+    console.log('Client disconnected');
+    socket.leave(socket.roomId);
+   });
   
 });
 
