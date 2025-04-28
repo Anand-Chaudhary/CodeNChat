@@ -144,6 +144,7 @@ const Project = () => {
         socket.disconnect();
       }
     };
+    
   }, [location.state.project._id]); 
   
   const send = () => {
