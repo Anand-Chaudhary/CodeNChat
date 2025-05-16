@@ -4,6 +4,7 @@ import {Server} from 'socket.io';
 import jwt from 'jsonwebtoken';
 import mongoose from "mongoose";
 import Project from "./models/project.model.js";
+import { getResult } from "./controller/ai.controller.js";
 
 const PORT = process.env.PORT || 3000;
 
@@ -50,7 +51,28 @@ io.on('connection', socket => {
   console.log('New client connected');
   socket.join(socket.roomId)
 
-  socket.on('project-message', data => { 
+  socket.on('project-message', async data => { 
+    const message = data.message || "";
+    const callForAI = message.includes("@AI");
+
+    if(callForAI){
+        const prompt = message.replace("@AI", "").trim();
+        
+        const result = await getResult(prompt).catch(error => {
+            console.error(error);
+            return "AI encountered an error processing your request.";
+        });
+        console.log(`AI Response: ${result}`);
+        
+
+    io.to(socket.roomId).emit('project-message', { 
+        message: result, 
+        sender:"AI"
+    });
+    }
+
+    
+    
     socket.broadcast.to(socket.roomId).emit('project-message', data);
     console.log(`Message ${data} in project ${socket.project._id}: ${data}`);
     
