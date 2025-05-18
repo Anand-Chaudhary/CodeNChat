@@ -4,7 +4,7 @@ import {Server} from 'socket.io';
 import jwt from 'jsonwebtoken';
 import mongoose from "mongoose";
 import Project from "./models/project.model.js";
-import { getResult } from "./controller/ai.controller.js";
+import { generateContent } from "./services/ai.service.js";
 
 const PORT = process.env.PORT || 3000;
 
@@ -52,30 +52,33 @@ io.on('connection', socket => {
   socket.join(socket.roomId)
 
   socket.on('project-message', async data => { 
-    const message = data.message || "";
+    const message = data.message;
     const callForAI = message.includes("@AI");
 
+    socket.broadcast.to(socket.roomId).emit('project-message', {
+      message: data.message,
+      sender: data.sender,
+      timestamp: new Date().toLocaleTimeString(),
+    });
+    console.log(`Message ${message} in project ${socket.project._id} at ${new Date().toLocaleTimeString()}`);
+
     if(callForAI){
-        const prompt = message.replace("@AI", "").trim();
+
+        const prompt = message.replace("@AI", "");
         
-        const result = await getResult(prompt).catch(error => {
+        const result = await generateContent(prompt).catch(error => {
             console.error(error);
             return "AI encountered an error processing your request.";
         });
-        console.log(`AI Response: ${result}`);
-        
+        console.log(`AI Response received at timestamp: ${new Date().toLocaleTimeString()}`);
 
-    io.to(socket.roomId).emit('project-message', { 
-        message: result, 
-        sender:"AI"
-    });
+      io.to(socket.roomId).emit('project-message', {
+        message: result,
+        sender: "AI",
+        timestamp: new Date().toLocaleTimeString(),
+      });
     }
 
-    
-    
-    socket.broadcast.to(socket.roomId).emit('project-message', data);
-    console.log(`Message ${data} in project ${socket.project._id}: ${data}`);
-    
   });
 
   socket.on('event', data => { /* … */ });

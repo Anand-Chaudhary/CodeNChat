@@ -44,7 +44,7 @@ function Home() {
       const res = await axiosInstance.post('/projects/create', {
         name: projectName,
       });
-
+      
       // Reset form and close modal
       setProjectName("");
       setIsModalOpen(false);

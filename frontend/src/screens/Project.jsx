@@ -118,17 +118,44 @@ const Project = () => {
 
     receiveMessage('project-message', (data) => {
       console.log('Received message:', data);
-      setMessages(prev => [...prev, data]);
+      setMessages(prev => [...prev, data].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp)));
     });
-
 
     return () => {
       if (socket) {
         socket.disconnect();
       }
     };
-
   }, [location.state.project._id]);
+
+  const writeAIMessage = (msg) => {
+  let messageObject;
+
+  try {
+    messageObject = JSON.parse(msg);
+  } catch (error) {
+    // If it's not JSON, treat it as plain text
+    messageObject = { text: msg };
+    console.log('Error parsing message:', error.message);
+  }
+
+  return (
+    <div className="overflow-auto custom-scrollbar">
+      <Markdown
+        children={messageObject.text}
+        options={{
+          overrides: {
+            code: {
+              syntaxHighlight: true,
+            },
+          },
+        }}
+        rehype-plugins={[rehypeHighlight]}
+      />
+    </div>
+  );
+};
+
 
   const send = () => {
     if (!message.trim()) return;
@@ -143,8 +170,9 @@ const Project = () => {
       timestamp: new Date().toISOString()
     };
 
-    setMessages(prev => [...prev, messageObject]); // add to state
     sendMessage('project-message', messageObject);
+
+    setMessages(prev => [...prev, messageObject]); // add to state
 
     setMessage('');
   };
@@ -153,7 +181,7 @@ const Project = () => {
     <main className="w-screen h-screen flex bg-zinc-800">
       <section className="left relative h-full min-w-95 flex flex-col bg-purple-300">
         <header className="flex bg-white justify-between items-center p-2 px-4 w-full absolute top-0 z-10">
-          <h1>{Project.name}</h1>
+          <h1>{location.state.project.name}</h1>
           <button
             onClick={() => setIsSidePannelOpen(!isSidePannelOpen)}
             className="p-2 rounded-lg border border-gray-400"
@@ -170,21 +198,16 @@ const Project = () => {
             {messages.map((msg, index) => (
               <div
                 key={index}
-                className={`message p-2 bg-white w-fit rounded-lg flex flex-col gap-1 ${
-                  msg.sender === "AI"
-                    ? "bg-zinc-900 text-white max-w-72"
+                className={`message p-2 bg-white w-fit rounded-lg flex flex-col gap-1 ${msg.sender === "AI"
+                    ? "bg-zinc-900 text-white max-w-80"
                     : "max-w-56"
-                } ${msg.sender === user.id && "ml-auto"}`}
+                  } ${msg.sender === user.id && "ml-auto"}`}
               >
                 <small className="opacity-65 text-xs">
                   {msg.sender === user.id ? "You" : msg.sender}
                 </small>
                 {msg.sender === "AI" ? (
-                  <div className="overflow-auto">
-                    <Markdown rehype-plugins={[rehypeHighlight]}>
-                      {msg.message}
-                    </Markdown>
-                  </div>
+                  writeAIMessage(msg.message)
                 ) : (
                   <p className="text-sm">{msg.message}</p>
                 )}
@@ -211,9 +234,8 @@ const Project = () => {
         </div>
 
         <div
-          className={`side-pannel w-full h-full z-1 bg-purple-300 absolute top-0 left-0 transition-all duration-300 ${
-            isSidePannelOpen ? "translate-x-0" : "-translate-x-full"
-          }`}
+          className={`side-pannel w-full h-full z-1 bg-purple-300 absolute top-0 left-0 transition-all duration-300 ${isSidePannelOpen ? "translate-x-0" : "-translate-x-full"
+            }`}
         >
           <header className="flex bg-white justify-between items-center p-2 px-4 w-full">
             <h1 className="text-xl font-bold">Project Collaborators</h1>
@@ -289,11 +311,10 @@ const Project = () => {
                     <div
                       key={user._id}
                       onClick={() => handleUserSelect(user._id)}
-                      className={`p-4 rounded-xl cursor-pointer flex items-center gap-3 transition-all duration-200 hover:shadow-md ${
-                        selectedUsers.indexOf(user._id) !== -1
+                      className={`p-4 rounded-xl cursor-pointer flex items-center gap-3 transition-all duration-200 hover:shadow-md ${selectedUsers.indexOf(user._id) !== -1
                           ? "bg-purple-50 border-2 border-purple-500 shadow-purple-100"
                           : "bg-gray-50 hover:bg-gray-100 border-2 border-transparent"
-                      }`}
+                        }`}
                     >
                       <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center shadow-lg">
                         <i className="ri-user-3-fill text-white text-lg"></i>
@@ -329,11 +350,10 @@ const Project = () => {
                     handleAddUsers(), setIsAddUserModalOpen(false);
                   }}
                   disabled={selectedUsers.length === 0}
-                  className={`px-5 py-2.5 rounded-lg text-white font-medium transition-all duration-200 ${
-                    selectedUsers.length === 0
+                  className={`px-5 py-2.5 rounded-lg text-white font-medium transition-all duration-200 ${selectedUsers.length === 0
                       ? "bg-gray-400 cursor-not-allowed opacity-60"
                       : "bg-purple-600 hover:bg-purple-700 shadow-lg hover:shadow-purple-200"
-                  }`}
+                    }`}
                 >
                   Add {selectedUsers.length}{" "}
                   {selectedUsers.length === 1 ? "Member" : "Members"}

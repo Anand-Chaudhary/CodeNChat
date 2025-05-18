@@ -1,13 +1,13 @@
-import * as ai from "../services/ai.service.js";
+import * as ai from '../services/ai.service.js';
 
-export const getResult = async (prompt) => { 
+
+export const getResult = async (req, res) => {
     try {
-        if (!prompt) {
-            return res.status(400).json({ error: "Prompt is required" });
-        }
-        const response = await ai.generateContent(prompt);
-        return response;
+        const { prompt }  = req.query;
+        const result = await ai.generateContent(prompt);
+        res.send(result);
     } catch (error) {
-        console.error("Error in getResult:", error.message);
+        console.log("Error in getResult:" ,error.message);
+        res.status(500).send({ message: "Internal Server Error" });
     }
 }
