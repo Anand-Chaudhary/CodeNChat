@@ -101,6 +101,23 @@ export async function generateContent(prompt) {
        }
        
        </example>
+
+       You will strictly return the reponse in the following format with the exact same keys and values mention the keys always in the camel case and values in the string format.:
+       {
+        message: "Okay, let's create a basic Express server using ES6 modules. Here's the code and a breakdown of how to set it up:",
+        code: "// all the code & file structure here as one string"
+        fileTree: {
+            "app.js": {
+                file: {
+                    contents: "// all the code & file structure here as one string"
+                }
+            },
+            "package.json": {
+                file: {
+                    contents: "// all the code & file structure here as one string"
+                }
+            }
+        },
     
  IMPORTANT : don't use file name like routes/index.js
        

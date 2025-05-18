@@ -142,7 +142,7 @@ const Project = () => {
   return (
     <div className="overflow-auto custom-scrollbar">
       <Markdown
-        children={messageObject.text}
+        children={messageObject.message}
         options={{
           overrides: {
             code: {
