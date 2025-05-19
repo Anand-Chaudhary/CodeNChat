@@ -5,9 +5,9 @@ export const getResult = async (req, res) => {
     try {
         const { prompt }  = req.query;
         const result = await ai.generateContent(prompt);
-        res.send(result);
+        res.json(result);
     } catch (error) {
         console.log("Error in getResult:" ,error.message);
-        res.status(500).send({ message: "Internal Server Error" });
+        res.status(500).json({ message: "Internal Server Error" });
     }
 }

@@ -29,6 +29,19 @@ const Project = () => {
   const [projectUsers, setProjectUsers] = useState([]);
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState([]);
+  const [fileTree, setFileTree] = useState({
+    "app.js": {
+      content: `const express = require('express');`
+    },
+    " package.json": {
+      content: `{
+        "name": "your-project-name",
+        }
+      }`
+    }
+  })
+
+  const [currentFile, setCurrentFile] = useState(null)
 
   const messageBox = React.createRef();
 
@@ -128,33 +141,49 @@ const Project = () => {
     };
   }, [location.state.project._id]);
 
-  const writeAIMessage = (msg) => {
-  let messageObject;
+  const writeAIMessage = (data) => {
+    let messageContent;
 
-  try {
-    messageObject = JSON.parse(msg);
-  } catch (error) {
-    // If it's not JSON, treat it as plain text
-    messageObject = { text: msg };
-    console.log('Error parsing message:', error.message);
-  }
+    try {
+      // Handle both string and object inputs
+      if (typeof data === 'string') {
+        try {
+          const parsed = JSON.parse(data);
+          messageContent = parsed.message || parsed.text || data;
+        } catch {
+          messageContent = data;
+        }
+      } else if (typeof data === 'object') {
+        messageContent = data.message || data.text || JSON.stringify(data);
+      } else {
+        messageContent = String(data);
+      }
 
-  return (
-    <div className="overflow-auto custom-scrollbar">
-      <Markdown
-        children={messageObject.message}
-        options={{
-          overrides: {
-            code: {
-              syntaxHighlight: true,
-            },
-          },
-        }}
-        rehype-plugins={[rehypeHighlight]}
-      />
-    </div>
-  );
-};
+      return (
+        <div className="overflow-auto custom-scrollbar">
+          <Markdown
+            options={{
+              overrides: {
+                code: {
+                  component: ({ children, ...props }) => (
+                    <code {...props} className="hljs">
+                      {children}
+                    </code>
+                  ),
+                },
+              },
+            }}
+            rehypePlugins={[rehypeHighlight]}
+          >
+            {messageContent}
+          </Markdown>
+        </div>
+      );
+    } catch (error) {
+      console.error('Error rendering AI message:', error);
+      return <div className="text-red-500">Error displaying message</div>;
+    }
+  };
 
 
   const send = () => {
@@ -199,8 +228,8 @@ const Project = () => {
               <div
                 key={index}
                 className={`message p-2 bg-white w-fit rounded-lg flex flex-col gap-1 ${msg.sender === "AI"
-                    ? "bg-zinc-900 text-white max-w-80"
-                    : "max-w-56"
+                  ? "bg-zinc-900 text-white max-w-80"
+                  : "max-w-56"
                   } ${msg.sender === user.id && "ml-auto"}`}
               >
                 <small className="opacity-65 text-xs">
@@ -278,8 +307,33 @@ const Project = () => {
             </div>
           </div>
         </div>
-
-        {/* Add User Modal */}
+      </section>
+      <section className="right px-2 flex-grow h-full">
+              <div className="explorer bg-zinc-900 h-full max-w-72 py-2">
+                <div className="fileTree">
+                  {Object.keys(fileTree).map((fileName) => (
+                    <div key={fileName} className="file-item p-4 mb-2 bg-white hover:bg-purple-200 cursor-pointer">
+                      <i className="ri-file-text-line"></i>
+                      <span className="ml-2">{fileName}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="codeEditor">
+                {currentFile && (
+                  <div className="codeEditorHeader flex justify-between items-center">
+                    <h3 className="text-lg font-semibold">{currentFile.name}</h3>
+                    <button
+                      onClick={() => setCurrentFile(null)}
+                      className="p-1 rounded-md hover:bg-gray-200"
+                    >
+                      <i className="ri-close-line"></i>
+                    </button>
+                  </div>
+                )}
+              </div>
+      </section>
+      {/* Add User Modal */}
         {isAddUserModalOpen && (
           <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
             <div className="bg-white rounded-xl p-6 w-[450px] max-h-[80vh] shadow-2xl transform transition-all">
@@ -312,8 +366,8 @@ const Project = () => {
                       key={user._id}
                       onClick={() => handleUserSelect(user._id)}
                       className={`p-4 rounded-xl cursor-pointer flex items-center gap-3 transition-all duration-200 hover:shadow-md ${selectedUsers.indexOf(user._id) !== -1
-                          ? "bg-purple-50 border-2 border-purple-500 shadow-purple-100"
-                          : "bg-gray-50 hover:bg-gray-100 border-2 border-transparent"
+                        ? "bg-purple-50 border-2 border-purple-500 shadow-purple-100"
+                        : "bg-gray-50 hover:bg-gray-100 border-2 border-transparent"
                         }`}
                     >
                       <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center shadow-lg">
@@ -351,8 +405,8 @@ const Project = () => {
                   }}
                   disabled={selectedUsers.length === 0}
                   className={`px-5 py-2.5 rounded-lg text-white font-medium transition-all duration-200 ${selectedUsers.length === 0
-                      ? "bg-gray-400 cursor-not-allowed opacity-60"
-                      : "bg-purple-600 hover:bg-purple-700 shadow-lg hover:shadow-purple-200"
+                    ? "bg-gray-400 cursor-not-allowed opacity-60"
+                    : "bg-purple-600 hover:bg-purple-700 shadow-lg hover:shadow-purple-200"
                     }`}
                 >
                   Add {selectedUsers.length}{" "}
@@ -361,8 +415,7 @@ const Project = () => {
               </div>
             </div>
           </div>
-        )}
-      </section>
+      )}
     </main>
   );
 };
