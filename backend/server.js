@@ -53,24 +53,23 @@ io.on('connection', socket => {
 
   socket.on('project-message', async data => { 
     const message = data.message;
-    const callForAI = message.includes("@AI");
+    const callForAI = message.includes("@AI") || message.includes("@ai") || message.includes("@Ai");
 
     socket.broadcast.to(socket.roomId).emit('project-message', {
       message: data.message,
       sender: data.sender,
       timestamp: new Date().toLocaleTimeString(),
-    });
+    })
+
     console.log(`Message ${message} in project ${socket.project._id} at ${new Date().toLocaleTimeString()}`);
 
     if(callForAI){
-
-        const prompt = message.replace("@AI", "");
-        
-        const result = await generateContent(prompt).catch(error => {
-            console.error(error);
-            return "AI encountered an error processing your request.";
-        });
-        console.log(`AI Response received at timestamp: ${new Date().toLocaleTimeString()}`);
+      const prompt = message.replace("@AI" || "@ai" || "@Ai" , "");
+      
+      const result = await generateContent(prompt).catch(error => {
+        console.error(error);
+        return "AI encountered an error processing your request.";
+      });
 
       io.to(socket.roomId).emit('project-message', {
         message: result,
@@ -78,7 +77,6 @@ io.on('connection', socket => {
         timestamp: new Date().toLocaleTimeString(),
       });
     }
-
   });
 
   socket.on('event', data => { /* … */ });

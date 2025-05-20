@@ -19,61 +19,77 @@ export async function generateContent(prompt) {
                         type: {
                             type: Type.STRING,
                             description: "The type of response - 'simple' for text-only responses or 'project' for full project responses",
-                            
+
                             enum: ["simple", "project"]
                         },
                         text: {
                             type: Type.STRING,
                             description: "The explanation or response text"
                         },
-                        code:{
-                            type: Type.OBJECT,
-                            properties: {
-                                contents: {
-                                    type: Type.STRING,
-                                    description: "The code content"
-                                }
-                            }
-                        },
+                        // ...
                         fileTree: {
-                            type: Type.STRING,
-                            description: "A plain text diagram of the file tree structure"
-                        },
-                        buildCommand: {
+                          type: Type.ARRAY,
+                          description: "A list of files in the project. Each item in the array represents a file.",
+                          items: {
                             type: Type.OBJECT,
                             properties: {
-                                mainItem: {
-                                    type: Type.STRING,
-                                    description: "The main command to run"
-                                },
-                                commands: {
-                                    type: Type.ARRAY,
-                                    items: {
-                                        type: Type.STRING
+                              path: { // e.g., "src/app.js", "package.json"
+                                type: Type.STRING,
+                                description: "The full path of the file (e.g., 'src/components/MyComponent.js')"
+                              },
+                              content: { // To simplify from { file: { contents: "..." } }
+                                type: Type.STRING,
+                                description: "The actual text content of the file"
+                              }
+                              // Or, if you want to keep a structure closer to your original value structure:
+                              // name: { type: Type.STRING, description: "Filename or path" },
+                              // file: {
+                              //   type: Type.OBJECT,
+                              //   properties: {
+                              //     contents: { type: Type.STRING, description: "The contents of the file" }
+                              //   },
+                              //   required: ["contents"]
+                              // }
+                            },
+                            required: ["path", "content"] // Or ["name", "file"] if using the nested structure
+                          }
+                        },
+// ...
+                            buildCommand: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    mainItem: {
+                                        type: Type.STRING,
+                                        description: "The main command to run"
+                                    },
+                                    commands: {
+                                        type: Type.ARRAY,
+                                        items: {
+                                            type: Type.STRING
+                                        }
+                                    }
+                                }
+                            },
+                            startCommand: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    mainItem: {
+                                        type: Type.STRING,
+                                        description: "The main command to run"
+                                    },
+                                    commands: {
+                                        type: Type.ARRAY,
+                                        items: {
+                                            type: Type.STRING
+                                        }
                                     }
                                 }
                             }
                         },
-                        startCommand: {
-                            type: Type.OBJECT,
-                            properties: {
-                                mainItem: {
-                                    type: Type.STRING,
-                                    description: "The main command to run"
-                                },
-                                commands: {
-                                    type: Type.ARRAY,
-                                    items: {
-                                        type: Type.STRING
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    required: ["type", "text"]
-                }
-            },
-            systemInstructions: `
+                        required: ["type", "text"]
+                    }
+                },
+                systemInstructions: `
       You are an expert in MERN and Development. You have an experience of 10 years in the development. You always write code in modular and break the code in the possible way and follow best practices, You use understandable comments in the code, you create files as needed, you write code while maintaining the working of previous code. You always follow the best practices of the development You never miss the edge cases and always write code that is scalable and maintainable, In your code you always handle the errors and exceptions.
 
     Examples: 
@@ -146,7 +162,7 @@ export async function generateContent(prompt) {
     2. For project-related responses, use type: "project" and include all necessary fields
     3. Don't use file names like routes/index.js
       `
-        });
+            });
 
         const response = result.candidates[0].content.parts[0].text;
         return JSON.parse(response);
