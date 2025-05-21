@@ -28,30 +28,27 @@ export async function generateContent(prompt) {
                         },
                         // ...
                         fileTree: {
-                          type: Type.ARRAY,
-                          description: "A list of files in the project. Each item in the array represents a file.",
-                          items: {
-                            type: Type.OBJECT,
-                            properties: {
-                              path: { // e.g., "src/app.js", "package.json"
-                                type: Type.STRING,
-                                description: "The full path of the file (e.g., 'src/components/MyComponent.js')"
-                              },
-                              content: { // To simplify from { file: { contents: "..." } }
-                                type: Type.STRING,
-                                description: "The actual text content of the file"
+                          type: Type.OBJECT,
+                          description: "The file tree structure containing multiple files",
+                          properties: {
+                            files: {
+                              type: Type.ARRAY,
+                              description: "Array of files in the project",
+                              items: {
+                                type: Type.OBJECT,
+                                properties: {
+                                  contents: {
+                                    type: Type.STRING,
+                                    description: "The actual text content of the file"
+                                  },
+                                  path: {
+                                    type: Type.STRING,
+                                    description: "The full path of the file (e.g., 'src/components/MyComponent.js')"
+                                  }
+                                },
+                                required: ["contents", "path"]
                               }
-                              // Or, if you want to keep a structure closer to your original value structure:
-                              // name: { type: Type.STRING, description: "Filename or path" },
-                              // file: {
-                              //   type: Type.OBJECT,
-                              //   properties: {
-                              //     contents: { type: Type.STRING, description: "The contents of the file" }
-                              //   },
-                              //   required: ["contents"]
-                              // }
-                            },
-                            required: ["path", "content"] // Or ["name", "file"] if using the nested structure
+                            }
                           }
                         },
 // ...
@@ -92,7 +89,7 @@ export async function generateContent(prompt) {
                 systemInstructions: `
       You are an expert in MERN and Development. You have an experience of 10 years in the development. You always write code in modular and break the code in the possible way and follow best practices, You use understandable comments in the code, you create files as needed, you write code while maintaining the working of previous code. You always follow the best practices of the development You never miss the edge cases and always write code that is scalable and maintainable, In your code you always handle the errors and exceptions.
 
-    Examples: 
+    Examples:
 
     <example>
     user: Hello
@@ -108,43 +105,16 @@ export async function generateContent(prompt) {
       "type": "project",
       "text": "I'll help you create an Express application with a basic structure.",
       "fileTree": {
-          "app.js": {
-              file: {
-                  contents: "
-                  const express = require('express');
-                  const app = express();
-
-                  app.get('/', (req, res) => {
-                      res.send('Hello World!');
-                  });
-
-                  app.listen(3000, () => {
-                      console.log('Server is running on port 3000');
-                  })
-                  "
-              }
+        "files": [
+          {
+            "contents": "const express = require('express');\nconst app = express();\n\napp.get('/', (req, res) => {\n    res.send('Hello World!');\n});\n\napp.listen(3000, () => {\n    console.log('Server is running on port 3000');\n})",
+            "path": "app.js"
           },
-          "package.json": {
-              file: {
-                  contents: "
-                  {
-                      "name": "temp-server",
-                      "version": "1.0.0",
-                      "main": "index.js",
-                      "scripts": {
-                          "test": "echo \"Error: no test specified\" && exit 1"
-                      },
-                      "keywords": [],
-                      "author": "",
-                      "license": "ISC",
-                      "description": "",
-                      "dependencies": {
-                          "express": "^4.21.2"
-                      }
-                  }
-                  "
-              }
+          {
+            "contents": "{\n  \"name\": \"temp-server\",\n  \"version\": \"1.0.0\",\n  \"main\": \"app.js\",\n  \"scripts\": {\n    \"start\": \"node app.js\"\n  },\n  \"dependencies\": {\n    \"express\": \"^4.21.2\"\n  }\n}",
+            "path": "package.json"
           }
+        ]
       },
       "buildCommand": {
           mainItem: "npm",
@@ -157,7 +127,7 @@ export async function generateContent(prompt) {
     }
     </example>
 
-    IMPORTANT: 
+    IMPORTANT:
     1. For simple text responses (like greetings or questions), use type: "simple" and only include the text field
     2. For project-related responses, use type: "project" and include all necessary fields
     3. Don't use file names like routes/index.js
@@ -165,7 +135,22 @@ export async function generateContent(prompt) {
             });
 
         const response = result.candidates[0].content.parts[0].text;
-        return JSON.parse(response);
+        const parsedResponse = JSON.parse(response);
+
+        if (parsedResponse.type === "project" && parsedResponse.fileTree && parsedResponse.fileTree.files) {
+            const webContainerFiles = {};
+            parsedResponse.fileTree.files.forEach(file => {
+                webContainerFiles[file.path] = {
+                    file: {
+                        contents: file.contents
+                    }
+                };
+            });
+            parsedResponse.webContainerFiles = webContainerFiles; // Add the new format
+            delete parsedResponse.fileTree; // Remove the old format
+        }
+
+        return parsedResponse;
     } catch (error) {
         console.error("Error generating content:", error);
         throw error;

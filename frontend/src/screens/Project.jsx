@@ -173,24 +173,33 @@ const Project = () => {
 
       if (data.message?.webContainerFiles) {
         try {
-          // Ensure all file paths are relative to root
+          // Create a mapping between original paths and WebContainer paths
+          const pathMapping = {};
           const webContainerFiles = {};
+          
           Object.entries(data.message.webContainerFiles).forEach(([path, file]) => {
-            // Remove any leading 'src/' or './' from the path
-            const cleanPath = path.replace(/^(src\/|\.\/)/, '');
-            webContainerFiles[cleanPath] = file;
+            // Create a simple filename for WebContainer
+            const simplePath = path.split('/').pop();
+            const webContainerPath = `file_${Object.keys(webContainerFiles).length}_${simplePath}`;
+            
+            // Store the mapping
+            pathMapping[path] = webContainerPath;
+            webContainerFiles[webContainerPath] = file;
           });
 
           // Mount files to WebContainer
           await webContainer.mount(webContainerFiles);
           console.log('WebContainer mounted with files:', webContainerFiles);
 
-          // Update local state with the same structure
-          setFileTree(webContainerFiles);
+          // Update local state with the original structure
+          setFileTree(data.message.webContainerFiles);
 
           // If there's a current file open, update its content
-          if (currentFile && webContainerFiles[currentFile]?.file?.contents) {
-            setFileContent(webContainerFiles[currentFile].file.contents);
+          if (currentFile) {
+            const webContainerPath = pathMapping[currentFile];
+            if (webContainerPath && webContainerFiles[webContainerPath]?.file?.contents) {
+              setFileContent(webContainerFiles[webContainerPath].file.contents);
+            }
           }
         } catch (error) {
           console.error('Error mounting files to WebContainer:', error);
@@ -435,47 +444,137 @@ const Project = () => {
         <div className="codeEditor p-2 flex-grow h-full flex flex-col">
           {openFiles.length > 0 && (
             <>
-              <div className="flex gap-2 border-b">
-                {openFiles.map((file) => (
-                  <div
-                    onClick={() => handleFileOpen(file)}
-                    key={file}
-                    className={`codeEditorHeader flex items-center gap-2 px-4 py-2 cursor-pointer ${currentFile === file ? 'bg-white' : 'bg-gray-100'
-                      }`}
-                  >
-                    <h3 className="text-lg font-semibold">{file}</h3>
+              <div className="border-b w-full">
+                <div className="flex items-center">
+                  <div className="flex flex-grow overflow-x-auto custom-scrollbar gap-2 py-2">
+                    {openFiles.map((file) => (
+                      <div
+                        onClick={() => handleFileOpen(file)}
+                        key={file}
+                        className={`codeEditorHeader min-w-[100px] max-w-[200px] flex-shrink-0 flex items-center gap-2 px-4 py-2 cursor-pointer ${currentFile === file ? 'bg-white' : 'bg-gray-100'}`}
+                      >
+                        <h3 className="text-lg font-semibold truncate">{file}</h3>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleFileClose(file);
+                          }}
+                          className="p-1 rounded-md hover:bg-gray-200 flex-shrink-0"
+                        >
+                          <i className="ri-close-line"></i>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="actions flex-shrink-0 flex items-center gap-2 pl-4 pr-2">
                     <button
-                      onClick={() => handleFileClose(file)}
-                      className="p-1 rounded-md hover:bg-gray-200"
+                      className="p-2 bg-purple-500 cursor-pointer text-white rounded-lg hover:bg-purple-600 transition-colors"
+                      onClick={async () => {
+                        // Ensure webContainer is ready before spawning
+                        if (!webContainer) {
+                          console.error('WebContainer not initialized yet.');
+                          return;
+                        }
+
+                        console.log('Starting npm install...');
+
+                        // Spawn a shell and run npm install in the root directory
+                        const installProcess = await webContainer.spawn('/bin/sh', ['-c', 'cd / && npm install']);
+
+                        // Pipe stdout to console
+                        if (installProcess && installProcess.output) {
+                          installProcess.output.pipeTo(new WritableStream({
+                            write(chunk) {
+                              console.log('Install Output:', chunk);
+                            }
+                          }));
+                        } else {
+                          console.error('Install process output stream is undefined.');
+                        }
+
+                        // Pipe stderr to console
+                         if (installProcess && installProcess.stderr) {
+                           installProcess.stderr.pipeTo(new WritableStream({
+                             write(chunk) {
+                               console.error('Install Error:', chunk);
+                             }
+                           }));
+                         }
+
+                        // Wait for the process to finish
+                        const installExitCode = await installProcess.exit;
+                        console.log('Install process finished with exit code:', installExitCode);
+
+                        // Only run dev if installation was successful
+                        if (installExitCode === 0) {
+                          console.log('npm install successful. Starting npm run dev...');
+                          // Spawn a shell and run npm dev in the root directory
+                          const runProcess = await webContainer.spawn('/bin/sh', ['-c', 'cd / && npm run dev']);
+
+                          // Pipe stdout to console
+                           if (runProcess && runProcess.output) {
+                             runProcess.output.pipeTo(new WritableStream({
+                               write(chunk) {
+                                 console.log('Run Output:', chunk);
+                               }
+                             }));
+                           }
+
+                          // Pipe stderr to console
+                           if (runProcess && runProcess.stderr) {
+                             runProcess.stderr.pipeTo(new WritableStream({
+                               write(chunk) {
+                                 console.error('Run Error:', chunk);
+                               }
+                             }));
+                           }
+
+                          // Listen for the server-ready event
+                         webContainer.on('server-ready', (port, url) => {
+                           console.log(`Server ready on port ${port}: ${url}`);
+                           // TODO: Update the src of your iframe element here
+                           // Example: document.getElementById('your-iframe-id').src = url;
+                         });
+
+                        } else {
+                          console.error('npm install failed (exit code ' + installExitCode + '). Skipping npm run dev.');
+                        }
+
+                      }}
                     >
-                      <i className="ri-close-line"></i>
+                      Run
                     </button>
                   </div>
-                ))}
+                </div>
               </div>
-              <div className="relative flex-grow">
-                <pre
-                  className="codeEditorContent p-4 bg-zinc-900 text-white w-full h-full font-mono resize-none outline-none m-0"
-                  value={fileContent || ''}
-                  contentEditable="true"
-                  onChange={(e) => {
-                    handleFileContentUpdate(currentFile, e.target.value);
-                    sendMessage('file-content-update', {
-                      fileName: currentFile,
-                      content: e.target.value
-                    });
-                  }}
-                  spellCheck="false"
-                >
-                  <code
-                    className="hljs m-0"
-                    contentEditable
-                    suppressContentEditableWarning={true}
-                    dangerouslySetInnerHTML={{
-                      __html: fileContent ? hljs.highlightAuto(fileContent).value : ''
-                    }}
-                  />
-                </pre>
+              <div className="relative flex-grow overflow-hidden">
+                <div className="absolute inset-0">
+                  <div className="w-full h-full">
+                    <pre
+                      className="codeEditorContent w-full h-full p-4 bg-zinc-900 text-white font-mono resize-none outline-none m-0 overflow-y-auto custom-scrollbar"
+                      value={fileContent || ''}
+                      contentEditable="true"
+                      onChange={(e) => {
+                        handleFileContentUpdate(currentFile, e.target.value);
+                        sendMessage('file-content-update', {
+                          fileName: currentFile,
+                          content: e.target.value
+                        });
+                      }}
+                      spellCheck="false"
+                    >
+                      <code
+                        className="hljs m-0 overflow-x-auto custom-scrollbar block"
+                        contentEditable
+                        suppressContentEditableWarning={true}
+                        dangerouslySetInnerHTML={{
+                          __html: fileContent ? hljs.highlightAuto(fileContent).value : ''
+                        }}
+                      />
+                    </pre>
+                  </div>
+                </div>
               </div>
             </>
           )}
