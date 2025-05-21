@@ -5,6 +5,9 @@ import { initializeSocket, receiveMessage, sendMessage } from "../config/socket"
 import { UserContext } from "../context/User.Context.jsx";
 import Markdown from "markdown-to-jsx";
 import rehypeHighlight from "rehype-highlight";
+import hljs from "highlight.js";
+import 'highlight.js/styles/atom-one-dark.css';
+import { getWebContainer } from "../config/webContainer.js";
 
 const Project = () => {
   const location = useLocation();
@@ -33,7 +36,7 @@ const Project = () => {
   const [fileContent, setFileContent] = useState('');
   const [currentFile, setCurrentFile] = useState(null)
   const [openFiles, setOpenFiles] = useState([]);
-
+  const [webContainer, setWebContainer] = useState(null);
   const messageBox = React.createRef();
 
   // Add function to handle file opening
@@ -140,35 +143,57 @@ const Project = () => {
     messageBox.scrollTop = messageBox.scrollHeight;
   }
 
-  // Update the socket event listener to handle file tree updates
+  // Initialize WebContainer
   useEffect(() => {
+    const initWebContainer = async () => {
+      try {
+        const container = await getWebContainer();
+        if (container) {
+          await container.ready;
+          setWebContainer(container);
+          console.log('WebContainer initialized and ready:', container);
+        }
+      } catch (error) {
+        console.error('Failed to initialize WebContainer:', error);
+      }
+    };
+
+    initWebContainer();
+  }, []); // Only run once on mount
+
+  // Handle messages and file operations
+  useEffect(() => {
+    if (!webContainer) return; // Don't proceed if WebContainer isn't ready
+
     const socket = initializeSocket(location.state.project._id);
 
-    receiveMessage('project-message', (data) => {
+    receiveMessage('project-message', async (data) => {
       console.log('Received message:', data);
       setMessages(prev => [...prev, data]);
-      
-      if (data.message?.fileTree) {
-        const fileTreeArray = data.message.fileTree;
-        if (Array.isArray(fileTreeArray)) {
-          const newFileTree = {};
-          fileTreeArray.forEach(file => {
-            newFileTree[file.path] = {
-              file: {
-                contents: file.content
-              }
-            };
+
+      if (data.message?.webContainerFiles) {
+        try {
+          // Ensure all file paths are relative to root
+          const webContainerFiles = {};
+          Object.entries(data.message.webContainerFiles).forEach(([path, file]) => {
+            // Remove any leading 'src/' or './' from the path
+            const cleanPath = path.replace(/^(src\/|\.\/)/, '');
+            webContainerFiles[cleanPath] = file;
           });
-          setFileTree(newFileTree);
-          
-          if (currentFile && newFileTree[currentFile]?.file?.contents) {
-            setFileContent(newFileTree[currentFile].file.contents);
+
+          // Mount files to WebContainer
+          await webContainer.mount(webContainerFiles);
+          console.log('WebContainer mounted with files:', webContainerFiles);
+
+          // Update local state with the same structure
+          setFileTree(webContainerFiles);
+
+          // If there's a current file open, update its content
+          if (currentFile && webContainerFiles[currentFile]?.file?.contents) {
+            setFileContent(webContainerFiles[currentFile].file.contents);
           }
-        } else {
-          setFileTree(data.message.fileTree);
-          if (currentFile && data.message.fileTree[currentFile]?.file?.contents) {
-            setFileContent(data.message.fileTree[currentFile].file.contents);
-          }
+        } catch (error) {
+          console.error('Error mounting files to WebContainer:', error);
         }
       }
 
@@ -182,7 +207,7 @@ const Project = () => {
         socket.disconnect();
       }
     };
-  }, [location.state.project._id, currentFile]);
+  }, [location.state.project._id, currentFile, webContainer]);
 
   const writeAIMessage = (data) => {
     let messageContent;
@@ -248,27 +273,42 @@ const Project = () => {
     setMessage('');
   };
 
-  // Add function to handle file content updates
-  const handleFileContentUpdate = (fileName, content) => {
-    const updatedFileTree = {
-      ...fileTree,
-      [fileName]: {
-        file: {
-          contents: content
+  // Update file content handler
+  const handleFileContentUpdate = async (fileName, content) => {
+    if (!webContainer) {
+      console.error('WebContainer not initialized');
+      return;
+    }
+
+    try {
+      // Ensure file path is relative to root
+      const cleanPath = fileName.replace(/^(src\/|\.\/)/, '');
+      
+      // Update WebContainer first
+      await webContainer.fs.writeFile(cleanPath, content);
+      console.log('File written to WebContainer:', cleanPath);
+
+      // Update local state
+      const updatedFileTree = {
+        ...fileTree,
+        [cleanPath]: {
+          file: {
+            contents: content
+          }
         }
-      }
-    };
-    
-    // Update local state first
-    setFileTree(updatedFileTree);
-    setFileContent(content);
-    
-    // Send update to backend
-    sendMessage('project-message', {
-      message: `Updated file: ${fileName}`,
-      sender: user.id,
-      fileTree: updatedFileTree
-    });
+      };
+      setFileTree(updatedFileTree);
+      setFileContent(content);
+
+      // Send update to backend in the same format
+      sendMessage('project-message', {
+        message: `Updated file: ${cleanPath}`,
+        sender: user.id,
+        webContainerFiles: updatedFileTree
+      });
+    } catch (error) {
+      console.error('Error updating file in WebContainer:', error);
+    }
   };
 
   return (
@@ -397,7 +437,7 @@ const Project = () => {
             <>
               <div className="flex gap-2 border-b">
                 {openFiles.map((file) => (
-                  <button
+                  <div
                     onClick={() => handleFileOpen(file)}
                     key={file}
                     className={`codeEditorHeader flex items-center gap-2 px-4 py-2 cursor-pointer ${currentFile === file ? 'bg-white' : 'bg-gray-100'
@@ -410,21 +450,33 @@ const Project = () => {
                     >
                       <i className="ri-close-line"></i>
                     </button>
-                  </button>
+                  </div>
                 ))}
               </div>
-              <textarea
-                className="codeEditorContent p-4 bg-zinc-900 text-white flex-grow font-mono resize-none outline-none"
-                value={fileContent || ''}
-                onChange={(e) => {
-                  handleFileContentUpdate(currentFile, e.target.value);
-                  // You might want to emit this change to the backend here
-                  sendMessage('file-content-update', {
-                    fileName: currentFile,
-                    content: e.target.value
-                  });
-                }}
-              />
+              <div className="relative flex-grow">
+                <pre
+                  className="codeEditorContent p-4 bg-zinc-900 text-white w-full h-full font-mono resize-none outline-none m-0"
+                  value={fileContent || ''}
+                  contentEditable="true"
+                  onChange={(e) => {
+                    handleFileContentUpdate(currentFile, e.target.value);
+                    sendMessage('file-content-update', {
+                      fileName: currentFile,
+                      content: e.target.value
+                    });
+                  }}
+                  spellCheck="false"
+                >
+                  <code
+                    className="hljs m-0"
+                    contentEditable
+                    suppressContentEditableWarning={true}
+                    dangerouslySetInnerHTML={{
+                      __html: fileContent ? hljs.highlightAuto(fileContent).value : ''
+                    }}
+                  />
+                </pre>
+              </div>
             </>
           )}
         </div>
