@@ -13,6 +13,7 @@ export async function generateContent(prompt) {
             }],
             config: {
                 responseMimeType: "application/json",
+                temperature: 0.4,
                 responseSchema: {
                     type: Type.OBJECT,
                     properties: {

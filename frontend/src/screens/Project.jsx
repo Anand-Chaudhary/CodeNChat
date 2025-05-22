@@ -175,17 +175,14 @@ const Project = () => {
         try {
           // Create a mapping between original paths and WebContainer paths
           const pathMapping = {};
+
           const webContainerFiles = {};
-          
+
           Object.entries(data.message.webContainerFiles).forEach(([path, file]) => {
-            // Create a simple filename for WebContainer
-            const simplePath = path.split('/').pop();
-            const webContainerPath = `file_${Object.keys(webContainerFiles).length}_${simplePath}`;
-            
-            // Store the mapping
-            pathMapping[path] = webContainerPath;
-            webContainerFiles[webContainerPath] = file;
+            const filename = path.split('/').pop(); // e.g., package.json
+            webContainerFiles[filename] = file;     // ✅ mount using real filename
           });
+
 
           // Mount files to WebContainer
           await webContainer.mount(webContainerFiles);
@@ -292,7 +289,7 @@ const Project = () => {
     try {
       // Ensure file path is relative to root
       const cleanPath = fileName.replace(/^(src\/|\.\/)/, '');
-      
+
       // Update WebContainer first
       await webContainer.fs.writeFile(cleanPath, content);
       console.log('File written to WebContainer:', cleanPath);
@@ -471,76 +468,102 @@ const Project = () => {
                     <button
                       className="p-2 bg-purple-500 cursor-pointer text-white rounded-lg hover:bg-purple-600 transition-colors"
                       onClick={async () => {
-                        // Ensure webContainer is ready before spawning
                         if (!webContainer) {
                           console.error('WebContainer not initialized yet.');
                           return;
                         }
 
-                        console.log('Starting npm install...');
+                        try {
+                          console.log('Cleaning up old installs...');
+                          await webContainer.spawn('rm', ['-rf', 'node_modules', 'package-lock.json']);
 
-                        // Spawn a shell and run npm install in the root directory
-                        const installProcess = await webContainer.spawn('/bin/sh', ['-c', 'cd / && npm install']);
+                          console.log('Verifying files...');
+                          const rootFiles = await webContainer.fs.readdir('/');
+                          console.log('Files in root:', rootFiles);
 
-                        // Pipe stdout to console
-                        if (installProcess && installProcess.output) {
-                          installProcess.output.pipeTo(new WritableStream({
-                            write(chunk) {
-                              console.log('Install Output:', chunk);
+                          if (!rootFiles.includes('package.json')) {
+                            throw new Error('package.json not found in root. Cannot run npm install.');
+                          }
+
+                          console.log('Starting npm install...');
+                          const installProcess = await webContainer.spawn('npm', ['install', '--no-audit', '--no-fund']);
+
+                          // Create a buffer to store the output
+                          let outputBuffer = '';
+                          let errorBuffer = '';
+
+                          // Handle stdout
+                          if (installProcess.output) {
+                            installProcess.output.pipeTo(new WritableStream({
+                              write(chunk) {
+                                const out = chunk instanceof Uint8Array ? new TextDecoder().decode(chunk) : String(chunk);
+                                outputBuffer += out;
+                                // Only log non-spinner characters
+                                if (!out.includes('\x1b[1G') && !out.includes('\x1b[0K')) {
+                                  console.log('Install Output:', out);
+                                }
+                              }
+                            }));
+                          }
+
+                          // Handle stderr
+                          if (installProcess.stderr) {
+                            installProcess.stderr.pipeTo(new WritableStream({
+                              write(chunk) {
+                                const errOut = chunk instanceof Uint8Array ? new TextDecoder().decode(chunk) : String(chunk);
+                                errorBuffer += errOut;
+                                console.error('Install Error:', errOut);
+                              }
+                            }));
+                          }
+
+                          // Wait for the process to complete
+                          const exitCode = await installProcess.exit;
+                          
+                          if (exitCode === 0) {
+                            console.log('npm install completed successfully');
+                            
+                            // Start the development server
+                            console.log('Starting development server...');
+                            const devServer = await webContainer.spawn('npm', ['start']);
+
+                            // Handle dev server output
+                            if (devServer.output) {
+                              devServer.output.pipeTo(new WritableStream({
+                                write(chunk) {
+                                  const out = chunk instanceof Uint8Array ? new TextDecoder().decode(chunk) : String(chunk);
+                                  console.log('Dev Server:', out);
+                                  
+                                  // Check if the server is ready
+                                  if (out.includes('Local:') || out.includes('On Your Network:')) {
+                                    console.log('Development server is ready!');
+                                    // You could add a success message to the UI here
+                                  }
+                                }
+                              }));
                             }
-                          }));
-                        } else {
-                          console.error('Install process output stream is undefined.');
+
+                            // Handle dev server errors
+                            if (devServer.stderr) {
+                              devServer.stderr.pipeTo(new WritableStream({
+                                write(chunk) {
+                                  const errOut = chunk instanceof Uint8Array ? new TextDecoder().decode(chunk) : String(chunk);
+                                  console.error('Dev Server Error:', errOut);
+                                }
+                              }));
+                            }
+
+                            // Store the dev server process for cleanup
+                            window.devServerProcess = devServer;
+
+                          } else {
+                            throw new Error(`npm install failed with exit code ${exitCode}`);
+                          }
+
+                        } catch (err) {
+                          console.error('Run error:', err.message);
+                          // You could add an error message to the UI here
                         }
-
-                        // Pipe stderr to console
-                         if (installProcess && installProcess.stderr) {
-                           installProcess.stderr.pipeTo(new WritableStream({
-                             write(chunk) {
-                               console.error('Install Error:', chunk);
-                             }
-                           }));
-                         }
-
-                        // Wait for the process to finish
-                        const installExitCode = await installProcess.exit;
-                        console.log('Install process finished with exit code:', installExitCode);
-
-                        // Only run dev if installation was successful
-                        if (installExitCode === 0) {
-                          console.log('npm install successful. Starting npm run dev...');
-                          // Spawn a shell and run npm dev in the root directory
-                          const runProcess = await webContainer.spawn('/bin/sh', ['-c', 'cd / && npm run dev']);
-
-                          // Pipe stdout to console
-                           if (runProcess && runProcess.output) {
-                             runProcess.output.pipeTo(new WritableStream({
-                               write(chunk) {
-                                 console.log('Run Output:', chunk);
-                               }
-                             }));
-                           }
-
-                          // Pipe stderr to console
-                           if (runProcess && runProcess.stderr) {
-                             runProcess.stderr.pipeTo(new WritableStream({
-                               write(chunk) {
-                                 console.error('Run Error:', chunk);
-                               }
-                             }));
-                           }
-
-                          // Listen for the server-ready event
-                         webContainer.on('server-ready', (port, url) => {
-                           console.log(`Server ready on port ${port}: ${url}`);
-                           // TODO: Update the src of your iframe element here
-                           // Example: document.getElementById('your-iframe-id').src = url;
-                         });
-
-                        } else {
-                          console.error('npm install failed (exit code ' + installExitCode + '). Skipping npm run dev.');
-                        }
-
                       }}
                     >
                       Run
