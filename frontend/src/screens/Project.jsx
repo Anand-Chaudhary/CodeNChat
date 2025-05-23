@@ -37,6 +37,7 @@ const Project = () => {
   const [currentFile, setCurrentFile] = useState(null)
   const [openFiles, setOpenFiles] = useState([]);
   const [webContainer, setWebContainer] = useState(null);
+  const [iframeURL, setIframeURL] = useState(null);
   const messageBox = React.createRef();
 
   // Add function to handle file opening
@@ -537,7 +538,11 @@ const Project = () => {
                                   // Check if the server is ready
                                   if (out.includes('Local:') || out.includes('On Your Network:')) {
                                     console.log('Development server is ready!');
-                                    // You could add a success message to the UI here
+                                    // Get the server URL from WebContainer
+                                    const url = webContainer.url;
+                                    console.log('Server is ready at:', url);
+                                    // Set the iframe URL to the WebContainer URL
+                                    setIframeURL(`http://localhost:${webContainer.port}`);
                                   }
                                 }
                               }));
@@ -602,6 +607,17 @@ const Project = () => {
             </>
           )}
         </div>
+
+        {iframeURL && (
+          <div className="iframe-container w-full h-full">
+            <iframe
+              src={iframeURL}
+              title="WebContainer"
+              className="w-full h-full border-none"
+              sandbox="allow-same-origin allow-scripts allow-modals allow-forms"
+            ></iframe>
+          </div>
+        )}
       </section>
       {/* Add User Modal */}
       {isAddUserModalOpen && (
