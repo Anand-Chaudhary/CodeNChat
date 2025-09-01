@@ -1,5 +1,5 @@
 import "dotenv/config";
-import express, { urlencoded } from "express"
+import express from "express"
 import morgan from "morgan";
 import connect from "./db/db.js";
 import cookieParser from "cookie-parser";

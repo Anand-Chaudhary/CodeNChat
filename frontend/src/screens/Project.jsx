@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect, useContext, useReducer } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import axiosInstance from "../config/axios";
 import { initializeSocket, receiveMessage, sendMessage } from "../config/socket";
@@ -8,6 +8,18 @@ import rehypeHighlight from "rehype-highlight";
 import hljs from "highlight.js";
 import 'highlight.js/styles/atom-one-dark.css';
 import { getWebContainer } from "../config/webContainer.js";
+
+// Reducer for iframeURL
+const iframeURLReducer = (state, action) => {
+  switch (action.type) {
+    case 'SET_URL':
+      return action.payload;
+    case 'CLEAR_URL':
+      return null;
+    default:
+      return state;
+  }
+};
 
 const Project = () => {
   const location = useLocation();
@@ -37,7 +49,7 @@ const Project = () => {
   const [currentFile, setCurrentFile] = useState(null)
   const [openFiles, setOpenFiles] = useState([]);
   const [webContainer, setWebContainer] = useState(null);
-  const [iframeURL, setIframeURL] = useState(null);
+  const [iframeURL, dispatchIframeURL] = useReducer(iframeURLReducer, '');
   const messageBox = React.createRef();
 
   // Add function to handle file opening
@@ -214,7 +226,7 @@ const Project = () => {
         socket.disconnect();
       }
     };
-  }, [location.state.project._id, currentFile, webContainer]);
+  }, [location.state.project._id, currentFile, webContainer, iframeURL]);
 
   const writeAIMessage = (data) => {
     let messageContent;
@@ -439,117 +451,70 @@ const Project = () => {
             ))}
           </div>
         </div>
-        <div className="codeEditor p-2 flex-grow h-full flex flex-col">
-          {openFiles.length > 0 && (
-            <>
-              <div className="border-b w-full">
-                <div className="flex items-center">
-                  <div className="flex flex-grow overflow-x-auto custom-scrollbar gap-2 py-2">
-                    {openFiles.map((file) => (
-                      <div
-                        onClick={() => handleFileOpen(file)}
-                        key={file}
-                        className={`codeEditorHeader min-w-[100px] max-w-[200px] flex-shrink-0 flex items-center gap-2 px-4 py-2 cursor-pointer ${currentFile === file ? 'bg-white' : 'bg-gray-100'}`}
-                      >
-                        <h3 className="text-lg font-semibold truncate">{file}</h3>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleFileClose(file);
-                          }}
-                          className="p-1 rounded-md hover:bg-gray-200 flex-shrink-0"
+        <div className="flex flex-grow h-full">
+          {/* Code Editor Section */}
+          <div className="codeEditor p-2 flex-grow h-full flex flex-col border-r border-zinc-700">
+            {openFiles.length > 0 && (
+              <>
+                <div className="border-b w-full">
+                  <div className="flex items-center">
+                    <div className="flex flex-grow overflow-x-auto custom-scrollbar gap-2 py-2">
+                      {openFiles.map((file) => (
+                        <div
+                          onClick={() => handleFileOpen(file)}
+                          key={file}
+                          className={`codeEditorHeader min-w-[100px] max-w-[200px] flex-shrink-0 flex items-center gap-2 px-4 py-2 cursor-pointer ${currentFile === file ? 'bg-white' : 'bg-gray-100'}`}
                         >
-                          <i className="ri-close-line"></i>
-                        </button>
-                      </div>
-                    ))}
-                  </div>
+                          <h3 className="text-lg font-semibold truncate">{file}</h3>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleFileClose(file);
+                            }}
+                            className="p-1 rounded-md hover:bg-gray-200 flex-shrink-0"
+                          >
+                            <i className="ri-close-line"></i>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
 
-                  <div className="actions flex-shrink-0 flex items-center gap-2 pl-4 pr-2">
-                    <button
-                      className="p-2 bg-purple-500 cursor-pointer text-white rounded-lg hover:bg-purple-600 transition-colors"
-                      onClick={async () => {
-                        if (!webContainer) {
-                          console.error('WebContainer not initialized yet.');
-                          return;
-                        }
-
-                        try {
-                          console.log('Cleaning up old installs...');
-                          await webContainer.spawn('rm', ['-rf', 'node_modules', 'package-lock.json']);
-
-                          console.log('Verifying files...');
-                          const rootFiles = await webContainer.fs.readdir('/');
-                          console.log('Files in root:', rootFiles);
-
-                          if (!rootFiles.includes('package.json')) {
-                            throw new Error('package.json not found in root. Cannot run npm install.');
+                    <div className="actions flex-shrink-0 flex items-center gap-2 pl-4 pr-2">
+                      <button
+                        className="p-2 bg-purple-500 cursor-pointer text-white rounded-lg hover:bg-purple-600 transition-colors"
+                        onClick={async () => {
+                          if (!webContainer) {
+                            console.error('WebContainer not initialized yet.');
+                            return;
                           }
 
-                          console.log('Starting npm install...');
-                          const installProcess = await webContainer.spawn('npm', ['install', '--no-audit', '--no-fund']);
+                          try {
+                            console.log('Cleaning up old installs...');
+                            await webContainer.spawn('rm', ['-rf', 'node_modules', 'package-lock.json']);
 
-                          // Create a buffer to store the output
-                          let outputBuffer = '';
-                          let errorBuffer = '';
+                            console.log('Verifying files...');
+                            const rootFiles = await webContainer.fs.readdir('/');
+                            console.log('Files in root:', rootFiles);
 
-                          // Handle stdout
-                          if (installProcess.output) {
-                            installProcess.output.pipeTo(new WritableStream({
-                              write(chunk) {
-                                const out = chunk instanceof Uint8Array ? new TextDecoder().decode(chunk) : String(chunk);
-                                outputBuffer += out;
-                                // Only log non-spinner characters
-                                if (!out.includes('\x1b[1G') && !out.includes('\x1b[0K')) {
-                                  console.log('Install Output:', out);
-                                }
-                              }
-                            }));
-                          }
+                            if (!rootFiles.includes('package.json')) {
+                              throw new Error('package.json not found in root. Cannot run npm install.');
+                            }
 
-                          // Handle stderr
-                          if (installProcess.stderr) {
-                            installProcess.stderr.pipeTo(new WritableStream({
-                              write(chunk) {
-                                const errOut = chunk instanceof Uint8Array ? new TextDecoder().decode(chunk) : String(chunk);
-                                errorBuffer += errOut;
-                                console.error('Install Error:', errOut);
-                              }
-                            }));
-                          }
+                            console.log('Starting npm install...');
+                            const installProcess = await webContainer.spawn('npm', ['install', '--no-audit', '--no-fund']);
 
-                          // Wait for the process to complete
-                          const exitCode = await installProcess.exit;
-                          
-                          if (exitCode === 0) {
-                            console.log('npm install completed successfully');
-                            
-                            // Start the development server
-                            console.log('Starting development server...');
-                            const devServer = await webContainer.spawn('npm', ['start']);
-
-                            // Handle dev server output
-                            if (devServer.output) {
-                              devServer.output.pipeTo(new WritableStream({
+                            // Handle stdout
+                            if (installProcess.output) {
+                              installProcess.output.pipeTo(new WritableStream({
                                 write(chunk) {
                                   const out = chunk instanceof Uint8Array ? new TextDecoder().decode(chunk) : String(chunk);
-                                  console.log('Dev Server:', out);
-                                  
-                                  // Check if the server is ready
-                                  if (out.includes('Local:') || out.includes('On Your Network:')) {
-                                    console.log('Development server is ready!');
-                                    // Get the server URL from WebContainer
-                                    const url = webContainer.url;
-                                    console.log('Server is ready at:', url);
-                                    // Set the iframe URL to the WebContainer URL
-                                    setIframeURL(`http://localhost:${webContainer.port}`);
-                                  }
+                                  console.log('Install Output:', out);
                                 }
                               }));
                             }
 
-                            // Handle dev server errors
-                            if (devServer.stderr) {
+                            // Handle stderr
+                            if (installProcess.stderr) {
                               devServer.stderr.pipeTo(new WritableStream({
                                 write(chunk) {
                                   const errOut = chunk instanceof Uint8Array ? new TextDecoder().decode(chunk) : String(chunk);
@@ -558,66 +523,138 @@ const Project = () => {
                               }));
                             }
 
-                            // Store the dev server process for cleanup
-                            window.devServerProcess = devServer;
+                            // Wait for the process to complete
+                            const exitCode = await installProcess.exit;
+                            
+                            if (exitCode === 0) {
+                              console.log('npm install completed successfully');
+                              
+                              // Start the development server
+                              console.log('Starting development server...');
+                              const devServer = await webContainer.spawn('npm', ['start']);
 
-                          } else {
-                            throw new Error(`npm install failed with exit code ${exitCode}`);
+                              // Handle dev server output
+                              if (devServer.output) {
+                                devServer.output.pipeTo(new WritableStream({
+                                  write(chunk) {
+                                    const out = chunk instanceof Uint8Array ? new TextDecoder().decode(chunk) : String(chunk);
+                                    console.log('Dev Server:', out);
+                                    
+                                    // Check if the server is ready
+                                    if (out.includes('Local:') || out.includes('On Your Network:')) {
+                                      console.log('Development server is ready!');
+                                      // Get the server URL from WebContainer
+                                      const url = webContainer.url;
+                                      console.log('Server is ready at:', url);
+                                      console.log('WebContainer URL before dispatch:', url);
+                                      if (url) {
+                                        // Set the iframe URL to the WebContainer URL
+                                        dispatchIframeURL({ type: 'SET_URL', payload: url });
+                                        console.log('Iframe URL dispatched:', url);
+                                      } else {
+                                        console.error('WebContainer URL is undefined');
+                                      }
+                                    }
+                                  }
+                                }));
+                              }
+
+                              // Handle dev server errors
+                              if (devServer.stderr) {
+                                devServer.stderr.pipeTo(new WritableStream({
+                                  write(chunk) {
+                                    const errOut = chunk instanceof Uint8Array ? new TextDecoder().decode(chunk) : String(chunk);
+                                    console.error('Dev Server Error:', errOut);
+                                  }
+                                }));
+                              }
+
+                              // Store the dev server process for cleanup
+                              window.devServerProcess = devServer;
+
+                            } else {
+                              throw new Error(`npm install failed with exit code ${exitCode}`);
+                            }
+
+                          } catch (err) {
+                            console.error('Run error:', err.message);
+                            // You could add an error message to the UI here
                           }
-
-                        } catch (err) {
-                          console.error('Run error:', err.message);
-                          // You could add an error message to the UI here
-                        }
-                      }}
-                    >
-                      Run
-                    </button>
-                  </div>
-                </div>
-              </div>
-              <div className="relative flex-grow overflow-hidden">
-                <div className="absolute inset-0">
-                  <div className="w-full h-full">
-                    <pre
-                      className="codeEditorContent w-full h-full p-4 bg-zinc-900 text-white font-mono resize-none outline-none m-0 overflow-y-auto custom-scrollbar"
-                      value={fileContent || ''}
-                      contentEditable="true"
-                      onChange={(e) => {
-                        handleFileContentUpdate(currentFile, e.target.value);
-                        sendMessage('file-content-update', {
-                          fileName: currentFile,
-                          content: e.target.value
-                        });
-                      }}
-                      spellCheck="false"
-                    >
-                      <code
-                        className="hljs m-0 overflow-x-auto custom-scrollbar block"
-                        contentEditable
-                        suppressContentEditableWarning={true}
-                        dangerouslySetInnerHTML={{
-                          __html: fileContent ? hljs.highlightAuto(fileContent).value : ''
                         }}
-                      />
-                    </pre>
+                      >
+                        Run
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </>
-          )}
-        </div>
-
-        {iframeURL && (
-          <div className="iframe-container w-full h-full">
-            <iframe
-              src={iframeURL}
-              title="WebContainer"
-              className="w-full h-full border-none"
-              sandbox="allow-same-origin allow-scripts allow-modals allow-forms"
-            ></iframe>
+                <div className="relative flex-grow overflow-hidden">
+                  <div className="absolute inset-0">
+                    <div className="w-full h-full">
+                      <pre
+                        className="codeEditorContent w-full h-full p-4 bg-zinc-900 text-white font-mono resize-none outline-none m-0 overflow-y-auto custom-scrollbar"
+                        value={fileContent || ''}
+                        contentEditable="true"
+                        onChange={(e) => {
+                          handleFileContentUpdate(currentFile, e.target.value);
+                          sendMessage('file-content-update', {
+                            fileName: currentFile,
+                            content: e.target.value
+                          });
+                        }}
+                        spellCheck="false"
+                      >
+                        <code
+                          className="hljs m-0 overflow-x-auto custom-scrollbar block"
+                          contentEditable
+                          suppressContentEditableWarning={true}
+                          dangerouslySetInnerHTML={{
+                            __html: fileContent ? hljs.highlightAuto(fileContent).value : ''
+                          }}
+                        />
+                      </pre>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
-        )}
+
+          {/* Output Section */}
+          <div className="output-section w-1/3 h-full flex flex-col border-l border-zinc-700">
+            <div className="output-header bg-zinc-800 p-2 flex items-center justify-between">
+              <h3 className="text-white font-semibold">Output</h3>
+              <button 
+                className="p-1 text-gray-400 hover:text-white"
+                onClick={() => dispatchIframeURL({ type: 'CLEAR_URL' })}
+              >
+                <i className="ri-close-line"></i>
+              </button>
+            </div>
+            <div className="output-content flex-grow bg-zinc-900">
+              {console.log('Checking iframeURL:', iframeURL)}
+              {iframeURL ? (
+                <>
+                  {console.log('Rendering iframe with URL:', iframeURL)}
+                  <iframe
+                    key={iframeURL}
+                    src={iframeURL}
+                    title="WebContainer"
+                    className="w-full h-full border-none"
+                    sandbox="allow-same-origin allow-scripts allow-modals allow-forms allow-popups allow-downloads"
+                  ></iframe>
+                </>
+              ) : (
+                <>
+                  {console.log('Rendering placeholder message')}
+                  <div className="h-full text-center text-gray-500">
+                    <p>Run your code to see the output here</p> <br />
+                    {/* <p>I AM UNABLE TO SHOW THE OUTPUT PLEASE HELP ME FIX IT 😭😭</p> */}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
       </section>
       {/* Add User Modal */}
       {isAddUserModalOpen && (
